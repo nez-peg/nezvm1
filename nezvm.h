@@ -26,7 +26,6 @@
 	OP(NOTCHAR)\
 	OP(NOTSTRING)\
 	OP(OPTIONALCHARMAP)\
-	OP(OPTIONALSTRING)\
 	OP(ZEROMORECHARMAP)
 
 typedef struct NezVMInstruction {
@@ -74,9 +73,9 @@ struct ParsingContext {
   long bytecode_length;
   long startPoint;
 
-  uint8_t call_table_size;
-  uint8_t set_table_size;
-  uint8_t str_table_size;
+  uint16_t call_table_size;
+  uint16_t set_table_size;
+  uint16_t str_table_size;
   int* call_table;
   bitset_ptr_t* set_table;
   nezvm_string_ptr_t* str_table;
@@ -95,7 +94,7 @@ void nez_DisposeParsingContext(ParsingContext ctx);
 
 void nez_PrintErrorInfo(const char *errmsg);
 
-const char *get_opname(short opcode);
+// const char *get_opname(short opcode);
 
 NezVMInstruction *nez_LoadMachineCode(ParsingContext context,
                                       const char *fileName,

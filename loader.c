@@ -20,6 +20,21 @@ typedef struct ByteCodeLoader {
   NezVMInstruction *head;
 } ByteCodeLoader;
 
+static const char *get_opname(uint8_t opcode) {
+  switch (opcode) {
+#define OP_DUMPCASE(OP) \
+  case NEZVM_OP_##OP:   \
+    return "" #OP;
+    NEZ_IR_EACH(OP_DUMPCASE);
+  default:
+    fprintf(stderr, "%d\n", opcode);
+    assert(0 && "UNREACHABLE");
+    break;
+#undef OP_DUMPCASE
+  }
+  return "";
+}
+
 char *loadFile(const char *filename, size_t *length) {
   size_t len = 0;
   FILE *fp = fopen(filename, "rb");
@@ -66,7 +81,7 @@ static uint32_t Loader_Read32(ByteCodeLoader *loader) {
   return read32(loader->input, loader->info);
 }
 
-static uint16_t Loader_Read16(ByteCodeLoader *loader) {
+static short Loader_Read16(ByteCodeLoader *loader) {
   return read16(loader->input, loader->info);
 }
 
@@ -88,7 +103,7 @@ void nez_EmitInstruction(NezVMInstruction* ir, ByteCodeLoader *loader, ParsingCo
       break;
     }
     case NEZVM_OP_CALL: {
-      ir->arg = loader->input[loader->info->pos++];
+      ir->arg = Loader_Read16(loader);
       context->call_table[ir->arg] = Loader_Read32(loader);
       break;
     }
@@ -97,14 +112,14 @@ void nez_EmitInstruction(NezVMInstruction* ir, ByteCodeLoader *loader, ParsingCo
       break;
     }
     case NEZVM_OP_NOTCHAR: {
-      ir->arg = loader->input[loader->info->pos++];
+      ir->arg = Loader_Read16(loader);
       context->str_table[ir->arg].c = loader->input[loader->info->pos++];
       context->str_table[ir->arg].jump = Loader_Read32(loader);
       context->str_table[ir->arg].type = 0;
       break;
     }
     case NEZVM_OP_CHARMAP: {
-      ir->arg = loader->input[loader->info->pos++];
+      ir->arg = Loader_Read16(loader);
       int len = Loader_Read16(loader);
       context->set_table[ir->arg].set = (bitset_t *)malloc(sizeof(bitset_t));
       bitset_init(context->set_table[ir->arg].set);
@@ -117,25 +132,35 @@ void nez_EmitInstruction(NezVMInstruction* ir, ByteCodeLoader *loader, ParsingCo
     }
     case NEZVM_OP_OPTIONALCHARMAP:
     case NEZVM_OP_ZEROMORECHARMAP: {
-      ir->arg = loader->input[loader->info->pos++];
+      ir->arg = Loader_Read16(loader);
+      assert(ir->arg >= 0 && ir->arg < context->set_table_size);
       int len = Loader_Read16(loader);
       context->set_table[ir->arg].set = (bitset_t *)malloc(sizeof(bitset_t));
       bitset_init(context->set_table[ir->arg].set);
       for (int i = 0; i < len; i++) {
-        unsigned c = loader->input[loader->info->pos++];
-        bitset_set(context->set_table[ir->arg].set, c);
+        char c = loader->input[loader->info->pos++];
+        bitset_set(context->set_table[ir->arg].set, (unsigned int)c);
       }
+      fprintf(stderr, "<%d> %d\n", ir->arg, context->set_table[ir->arg].jump);
       break;
     }
     case NEZVM_OP_STRING:
     case NEZVM_OP_NOTSTRING:
      {
-      ir->arg = loader->input[loader->info->pos++];
+      ir->arg = Loader_Read16(loader);
       context->str_table[ir->arg].str = Loader_ReadString(loader);
       context->str_table[ir->arg].jump = Loader_Read32(loader);
       context->str_table[ir->arg].type = 1;
+      fprintf(stderr, "<%d> %s %d\n", ir->arg, context->str_table[ir->arg].str->text, context->str_table[ir->arg].jump);
       break;
     }
+    // case NEZVM_OP_OPTIONALSTRING:
+    //  {
+    //   ir->arg = loader->input[loader->info->pos++];
+    //   context->str_table[ir->arg].str = Loader_ReadString(loader);
+    //   context->str_table[ir->arg].type = 1;
+    //  }
+    //  break;
   }
 }
 
@@ -163,15 +188,15 @@ NezVMInstruction *nez_LoadMachineCode(ParsingContext context,
 
   /* call table size */
   context->call_table_size = read32(buf, &info);
-  context->call_table = (int *)malloc(sizeof(int) * context->call_table_size);
+  context->call_table = (int *)malloc(sizeof(int) * (int)context->call_table_size);
 
   /* set table size */
   context->set_table_size = read32(buf, &info);
-  context->set_table = (bitset_ptr_t *)malloc(sizeof(bitset_t) * context->set_table_size);
+  context->set_table = (bitset_ptr_t *)malloc(sizeof(bitset_t) * (int)context->set_table_size);
 
   /* str table size */
   context->str_table_size = read32(buf, &info);
-  context->str_table = (nezvm_string_ptr_t *)malloc(sizeof(nezvm_string_ptr_t) * context->str_table_size);
+  context->str_table = (nezvm_string_ptr_t *)malloc(sizeof(nezvm_string_ptr_t) * (int)context->str_table_size);
 
   /* bytecode length */
   info.bytecode_length = read64(buf, &info);
@@ -185,15 +210,20 @@ NezVMInstruction *nez_LoadMachineCode(ParsingContext context,
   memset(inst, 0, sizeof(*inst) * info.bytecode_length);
 
   /* init bytecode loader */
-  ByteCodeLoader loader;
-  loader.input = buf;
-  loader.info = &info;
-  loader.head = head;
+  ByteCodeLoader *loader = malloc(sizeof(ByteCodeLoader));
+  loader->input = buf;
+  loader->info = &info;
+  loader->head = head;
 
   /* f_convert[] is function pointer that emit instruction */
   for (uint64_t i = 0; i < info.bytecode_length; i++) {
+    if (i == 723)
+    {
+      fprintf(stderr, "debug\n");
+    }
     inst->op = buf[info.pos++];
-    nez_EmitInstruction(inst, &loader, context);
+    fprintf(stderr, "[%llu]%s\n", i, get_opname(inst->op));
+    nez_EmitInstruction(inst, loader, context);
     inst++;
   }
 

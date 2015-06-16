@@ -30,6 +30,8 @@ static int nezvm_string_equal(struct nezvm_string* str, const char *t) {
 #endif
 }
 
+int* debugStack;
+
 int max = 0;
 static inline void PUSH_IP(ParsingContext ctx, long jmp) {
   (ctx->stack_pointer++)->jmp = jmp;
@@ -54,7 +56,7 @@ static inline StackEntry POP_SP(ParsingContext ctx) {
 #define JUMP(dst) goto *GET_ADDR(pc += dst)
 #define RET goto *GET_ADDR(pc = inst + (POP_SP(context))->jmp)
 
-#define OP(OP) NEZVM_OP_##OP: //fprintf(stderr, "[%d] %s\n", pc - inst, get_opname(pc->op));
+#define OP(OP) NEZVM_OP_##OP: //fprintf(stderr, "[%lu]\n", pc - inst);
 
 long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
   static const void *OPJUMP[] = {
@@ -62,6 +64,9 @@ long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
     NEZ_IR_EACH(DEFINE_TABLE)
 #undef DEFINE_TABLE
   };
+
+  // debugStack = malloc(sizeof(int) * 1024);
+  // int debug_index = 0;
 
   register const char *cur = context->inputs + context->pos;
   register int failflag = 0;
@@ -73,13 +78,15 @@ long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
   pc = inst + 1;
 
   PUSH_IP(context, 0);
+  // debugStack[debug_index] = context->stack_pointer - context->stack_pointer_base;
+  // debug_index++;
 
   goto *GET_ADDR(pc);
 
   OP(EXIT) {
     context->pos = cur - context->inputs;
-    fprintf(stderr, "%s\n", cur);
-    fprintf(stderr, "%d\n", max);
+    // fprintf(stderr, "%s\n", cur);
+    // fprintf(stderr, "%d\n", max);
     return failflag;
   }
   OP(SUCC) {
@@ -95,9 +102,15 @@ long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
   }
   OP(CALL) {
     PUSH_IP(context, pc - inst + 1);
+    // debugStack[debug_index] = context->stack_pointer - context->stack_pointer_base;
+    // debug_index++;
     JUMP(call_table[pc->arg]);
   }
   OP(RET) {
+    // debug_index--;
+    // if((context->stack_pointer - context->stack_pointer_base) != debugStack[debug_index]) {
+    //   nez_PrintErrorInfo("StackError!!");
+    // }
     RET;
   }
   OP(IFFAIL) {
@@ -126,6 +139,7 @@ long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
   }
   OP(STRING) {
     int next;
+    // fprintf(stderr, "%c\n", *cur);
     if ((next = nezvm_string_equal(context->str_table[pc->arg].str, cur)) > 0) {
       cur += next;
     } else {
@@ -177,10 +191,10 @@ long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
     }
     DISPATCH_NEXT;
   }
-  OP(OPTIONALSTRING) {
-    cur += nezvm_string_equal(str_table[pc->arg].str, cur);
-    DISPATCH_NEXT;
-  }
+  // OP(OPTIONALSTRING) {
+  //   cur += nezvm_string_equal(str_table[pc->arg].str, cur);
+  //   DISPATCH_NEXT;
+  // }
   OP(ZEROMORECHARMAP) {
   L_head:
     ;
