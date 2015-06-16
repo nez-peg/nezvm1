@@ -207,6 +207,17 @@ long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
   return -1;
 }
 
+void nez_Match(ParsingContext context, NezVMInstruction *inst) {
+  uint64_t start, end;
+  start = timer();
+  if (nez_VM_Execute(context, inst)) {
+    nez_PrintErrorInfo("parse error");
+  }
+  end = timer();
+  fprintf(stderr, "ErapsedTime: %llu msec\n", (unsigned long long)end - start);
+  fprintf(stdout, "match\n\n");
+}
+
 #define NEZVM_STAT 5
 void nez_ParseStat(ParsingContext context, NezVMInstruction *inst) {
   for (int i = 0; i < NEZVM_STAT; i++) {
