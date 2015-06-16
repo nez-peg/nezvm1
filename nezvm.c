@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <sys/time.h> // gettimeofday
 #include "nezvm.h"
@@ -207,6 +208,50 @@ long nez_VM_Execute(ParsingContext context, NezVMInstruction *inst) {
   return -1;
 }
 
+void nez_log(ParsingContext ctx, const char* input_file, uint64_t latency) {
+  FILE *fp;
+
+  fprintf(stderr, "\nwriting log ...\n");
+
+  if ((fp = fopen("nez_c_log.csv", "a")) == NULL) {
+    fprintf(stderr, "file open error!!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  /*Parser*/
+  fprintf(fp, "MiniNez,");
+
+  /*Input File*/
+  int len = strlen(input_file);
+  int i;
+  for(i = len - 1; i >= 0; i--) {
+    if(input_file[i] == '/') {
+      i++;
+      break;
+    }
+  }
+  char input[len - i + 1];
+  strncpy(input, input_file+i, len - i);
+  input[len - i] = 0;
+  fprintf(fp, "Input File,%s,", input);
+
+  /*Input File Size*/
+  fprintf(fp, "Input File Size,%zu,", ctx->input_size);
+
+  /*Latency*/
+  fprintf(fp, "Latency[ms],%llu,", latency);
+
+  /*Throughput*/
+  double throughput = ctx->input_size / 1024.0;
+  throughput = throughput * 1000.0 / (double)latency;
+  fprintf(fp, "Throughput[KiB/s],%f,", throughput);
+  fprintf(fp, "\n");
+
+  fclose(fp);
+
+  fprintf(stderr, "\nend");
+}
+
 void nez_Match(ParsingContext context, NezVMInstruction *inst) {
   uint64_t start, end;
   start = timer();
@@ -219,9 +264,9 @@ void nez_Match(ParsingContext context, NezVMInstruction *inst) {
 }
 
 #define NEZVM_STAT 5
-void nez_ParseStat(ParsingContext context, NezVMInstruction *inst) {
+void nez_ParseStat(ParsingContext context, NezVMInstruction *inst, const char* input_file) {
+  uint64_t start, end, latency;
   for (int i = 0; i < NEZVM_STAT; i++) {
-    uint64_t start, end;
     start = timer();
     if (nez_VM_Execute(context, inst)) {
       nez_PrintErrorInfo("parse error");
@@ -230,8 +275,15 @@ void nez_ParseStat(ParsingContext context, NezVMInstruction *inst) {
     fprintf(stderr, "ErapsedTime: %llu msec\n",
             (unsigned long long)end - start);
     context->pos = 0;
+    if(i == 0) {
+      latency = (unsigned long long)end - start;
+    }
+    else if(latency > ((unsigned long long)end - start)) {
+      latency = (unsigned long long)end - start;
+    }
   }
   fprintf(stderr, "stack_size=%zd[Byte]\n", sizeof(union StackEntry) * context->stack_size);
+  nez_log(context, input_file, latency);
 }
 
 char *loadFile(const char *filename, size_t *length);

@@ -47,11 +47,11 @@ int main(int argc, char *const argv[]) {
   }
   context = nez_CreateParsingContext(input_file);
   inst = nez_LoadMachineCode(context, syntax_file, "File");
-  if(output_type != NULL) {
+  if(output_type == NULL) {
     nez_Match(context, inst);
   }
   else if (!strcmp(output_type, "stat")) {
-    nez_ParseStat(context, inst);
+    nez_ParseStat(context, inst, input_file);
   }
   nez_DisposeInstruction(inst, context->bytecode_length);
   nez_DisposeParsingContext(context);

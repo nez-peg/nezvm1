@@ -102,6 +102,6 @@ NezVMInstruction *nez_LoadMachineCode(ParsingContext context,
 void nez_DisposeInstruction(NezVMInstruction *inst, long length);
 
 void nez_Match(ParsingContext context, NezVMInstruction *inst);
-void nez_ParseStat(ParsingContext context, NezVMInstruction *inst);
+void nez_ParseStat(ParsingContext context, NezVMInstruction *inst, const char* input_file);
 
 #endif
